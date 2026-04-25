@@ -807,10 +807,24 @@
 
           <div class="field-gap" x-show="selectedProvider">
             <label class="field-label">API Key</label>
-            <input type="password"
-                   :value="selectedProvider ? (vars[providerMap[selectedProvider]?.key]||'') : ''"
-                   @input="if(selectedProvider) vars[providerMap[selectedProvider].key]=$event.target.value"
-                   :placeholder="selectedProvider ? (providerMap[selectedProvider]?.placeholder||'Paste your API key') : ''">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="password" style="flex:1;"
+                     :value="selectedProvider ? (vars[providerMap[selectedProvider]?.key]||'') : ''"
+                     @input="if(selectedProvider){ vars[providerMap[selectedProvider].key]=$event.target.value; testState={loading:false,ok:null,error:''}; }"
+                     :placeholder="selectedProvider ? (providerMap[selectedProvider]?.placeholder||'Paste your API key') : ''">
+              <button class="btn sm" @click="testProvider()" :disabled="testState.loading" style="flex-shrink:0;white-space:nowrap;">
+                <span x-show="!testState.loading">Test Key</span>
+                <span x-show="testState.loading">Testing…</span>
+              </button>
+            </div>
+            <div x-show="testState.ok === true"
+                 style="color:var(--green);font-size:12px;font-family:var(--font-mono);margin-top:5px;">
+              ✓ Key is valid
+            </div>
+            <div x-show="testState.ok === false"
+                 style="color:var(--red);font-size:12px;font-family:var(--font-mono);margin-top:5px;"
+                 x-text="'✗ ' + (testState.error || 'Key is invalid')">
+            </div>
           </div>
 
           <div class="field-gap" x-show="selectedProvider">
@@ -1259,6 +1273,7 @@ function app() {
     approved: [],
     saving: false,
     restartOnSave: true,
+    testState: { loading: false, ok: null, error: '' },
     // True only when the SERVER has a persisted complete config.
     // Distinct from isSetupDone, which tracks the in-memory form.
     savedConfigComplete: false,
@@ -1295,6 +1310,25 @@ function app() {
       // Clear keys from other providers when switching
       for (const [name, p] of Object.entries(this.providerMap)) {
         if (name !== this.selectedProvider) this.vars[p.key] = '';
+      }
+      this.testState = { loading: false, ok: null, error: '' };
+    },
+
+    async testProvider() {
+      if (!this.selectedProvider) return;
+      const envKey = this.providerMap[this.selectedProvider]?.key;
+      if (!envKey) return;
+      this.testState = { loading: true, ok: null, error: '' };
+      try {
+        const r = await fetch('/setup/api/test-provider', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ env_key: envKey, key: this.vars[envKey] || '' }),
+        });
+        const d = await r.json();
+        this.testState = { loading: false, ok: d.ok, error: d.error || '' };
+      } catch(e) {
+        this.testState = { loading: false, ok: false, error: e.message };
       }
     },
 

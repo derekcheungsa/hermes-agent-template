@@ -116,6 +116,18 @@ ENV_VARS = [
 
 SECRET_KEYS  = {k for k, _, _, s in ENV_VARS if s}
 PROVIDER_KEYS = [k for k, _, c, _ in ENV_VARS if c == "provider"]
+
+# Lightweight test endpoint for each provider — hits a cheap read-only endpoint
+# (usually /models) to verify the key is accepted. Returns 200 if valid.
+PROVIDER_TEST_CONFIGS: dict[str, dict] = {
+    "OPENROUTER_API_KEY": {"url": "https://openrouter.ai/api/v1/models",                     "auth": "Bearer"},
+    "DEEPSEEK_API_KEY":   {"url": "https://api.deepseek.com/models",                          "auth": "Bearer"},
+    "DASHSCOPE_API_KEY":  {"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/models", "auth": "Bearer"},
+    "GLM_API_KEY":        {"url": "https://open.bigmodel.cn/api/paas/v4/models",               "auth": "Bearer"},
+    "KIMI_API_KEY":       {"url": "https://api.moonshot.cn/v1/models",                         "auth": "Bearer"},
+    "MINIMAX_API_KEY":    {"url": "https://api.minimaxi.chat/v1/models",                       "auth": "Bearer"},
+    "HF_TOKEN":           {"url": "https://huggingface.co/api/whoami-v2",                      "auth": "Bearer"},
+}
 CHANNEL_MAP  = {
     "Telegram":    "TELEGRAM_BOT_TOKEN",
     "Discord":     "DISCORD_BOT_TOKEN",
@@ -652,6 +664,55 @@ async def api_config_reset(request: Request):
     return JSONResponse({"ok": True})
 
 
+async def api_test_provider(request: Request):
+    """POST /setup/api/test-provider — verify a provider API key before saving.
+
+    Accepts {"env_key": "OPENROUTER_API_KEY", "key": "<value or masked>"}.
+    If the key value ends with *** (masked by the UI), the stored .env value
+    is used instead so users can re-test a previously saved key without
+    having to re-enter it.
+    """
+    if err := guard(request): return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    env_key   = str(body.get("env_key", ""))
+    key_value = str(body.get("key", ""))
+
+    if env_key not in PROVIDER_TEST_CONFIGS:
+        return JSONResponse({"error": "No test available for this provider"}, status_code=400)
+
+    # Masked values end with *** — resolve the real key from the stored .env.
+    if not key_value or key_value.endswith("***"):
+        key_value = read_env(ENV_FILE).get(env_key, "")
+
+    if not key_value:
+        return JSONResponse({"ok": False, "error": "No API key configured"})
+
+    cfg = PROVIDER_TEST_CONFIGS[env_key]
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                cfg["url"],
+                headers={"Authorization": f"{cfg['auth']} {key_value}"},
+            )
+        if 200 <= resp.status_code < 300:
+            return JSONResponse({"ok": True})
+        elif resp.status_code in (401, 403):
+            return JSONResponse({"ok": False, "error": f"Key rejected by provider (HTTP {resp.status_code})"})
+        elif resp.status_code == 429:
+            # Rate-limited but authenticated — key is valid.
+            return JSONResponse({"ok": True, "note": "Rate limited, but key is valid"})
+        else:
+            return JSONResponse({"ok": False, "error": f"Provider returned HTTP {resp.status_code}"})
+    except httpx.TimeoutException:
+        return JSONResponse({"ok": False, "error": "Request timed out (10s)"})
+    except httpx.RequestError as exc:
+        return JSONResponse({"ok": False, "error": f"Network error: {exc}"})
+
+
 # ── Pairing ───────────────────────────────────────────────────────────────────
 def _pjson(path: Path) -> dict:
     try:
@@ -924,6 +985,7 @@ routes = [
     Route("/setup/api/gateway/stop",            api_gw_stop,         methods=["POST"]),
     Route("/setup/api/gateway/restart",         api_gw_restart,      methods=["POST"]),
     Route("/setup/api/config/reset",            api_config_reset,    methods=["POST"]),
+    Route("/setup/api/test-provider",           api_test_provider,   methods=["POST"]),
     Route("/setup/api/pairing/pending",         api_pairing_pending),
     Route("/setup/api/pairing/approve",         api_pairing_approve, methods=["POST"]),
     Route("/setup/api/pairing/deny",            api_pairing_deny,    methods=["POST"]),
