@@ -1,0 +1,13 @@
+# Force LF line endings for files that run on Linux containers.
+# Without this, Windows git (autocrlf=true) converts them to CRLF and
+# the container fails to execute shell scripts ("No such file or directory").
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.py        text eol=lf
+*.html      text eol=lf
+*.toml      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.txt       text eol=lf
+*.md        text eol=lf
+*.json      text eol=lf
