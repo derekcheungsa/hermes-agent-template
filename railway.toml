@@ -8,3 +8,7 @@ healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+
+[variables]
+ADMIN_USERNAME = { default = "admin", description = "Username for the Hermes admin dashboard" }
+ADMIN_PASSWORD = { description = "Password for the Hermes admin dashboard. Pick something strong." }
