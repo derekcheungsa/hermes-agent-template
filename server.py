@@ -84,6 +84,7 @@ ENV_VARS = [
     ("KIMI_API_KEY",             "Kimi",                     "provider",  True),
     ("MINIMAX_API_KEY",          "MiniMax",                  "provider",  True),
     ("HF_TOKEN",                 "Hugging Face",             "provider",  True),
+    ("NVIDIA_API_KEY",           "NVIDIA",                   "provider",  True),
     ("PARALLEL_API_KEY",         "Parallel (search)",        "tool",      True),
     ("FIRECRAWL_API_KEY",        "Firecrawl (scrape)",       "tool",      True),
     ("TAVILY_API_KEY",           "Tavily (search)",          "tool",      True),
@@ -127,6 +128,7 @@ PROVIDER_TEST_CONFIGS: dict[str, dict] = {
     "KIMI_API_KEY":       {"url": "https://api.moonshot.cn/v1/models",                         "auth": "Bearer"},
     "MINIMAX_API_KEY":    {"url": "https://api.minimaxi.chat/v1/models",                       "auth": "Bearer"},
     "HF_TOKEN":           {"url": "https://huggingface.co/api/whoami-v2",                      "auth": "Bearer"},
+    "NVIDIA_API_KEY":     {"url": "https://integrate.api.nvidia.com/v1/models",                "auth": "Bearer"},
 }
 CHANNEL_MAP  = {
     "Telegram":    "TELEGRAM_BOT_TOKEN",

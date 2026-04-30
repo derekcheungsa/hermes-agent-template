@@ -2,6 +2,9 @@
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
+# IMPORTANT: Attach a Railway volume at /data before deploying.
+# Without it, all config (keys, tokens, pairing) is lost on every restart.
+# Dashboard → your service → Storage → New Volume → Mount path: /data
 [deploy]
 startCommand = "/app/start.sh"
 healthcheckPath = "/health"

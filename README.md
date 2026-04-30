@@ -39,20 +39,27 @@ Hermes Agent interacts entirely through messaging channels — there is no chat 
 3. Send a message to your new bot — it will appear as a pairing request in the admin dashboard
 4. To find your Telegram user ID, message [@userinfobot](https://t.me/userinfobot)
 
-### 3. Deploy to Railway
+### 3. Create a Railway Volume (required)
+
+> **Without this step, all configuration — API keys, channel tokens, approved users — is permanently lost every time the container restarts or redeploys.**
+
+1. In the [Railway dashboard](https://railway.app/), open your project
+2. Click your service → **Storage** → **New Volume**
+3. Set the mount path to `/data`
+
+### 4. Deploy to Railway
 
 1. Click the **Deploy on Railway** button above
 2. Set the `ADMIN_PASSWORD` environment variable (or a random one will be generated and printed to deploy logs)
-3. Attach a **volume** mounted at `/data` (persists config across redeploys)
-4. Open your app URL — log in with username `admin` and your password
+3. Open your app URL — log in with username `admin` and your password
 
-### 4. Configure in the Admin Dashboard
+### 5. Configure in the Admin Dashboard
 
 1. **LLM Provider** — select OpenRouter from the dropdown, paste your API key, enter the model name
 2. **Messaging Channel** — check Telegram, paste the Bot Token from BotFather
 3. Click **Save & Start** — the gateway will start and your bot goes live
 
-### 5. Start Chatting
+### 6. Start Chatting
 
 Message your Telegram bot. If you're a new user, a pairing request will appear in the admin dashboard under **Users** — click **Approve**, and you're in.
 
@@ -71,7 +78,7 @@ All other configuration (LLM provider, model, channels, tools) is managed throug
 
 ## Supported Providers
 
-OpenRouter, DeepSeek, DashScope, GLM / Z.AI, Kimi, MiniMax, HuggingFace
+OpenRouter, DeepSeek, DashScope, GLM / Z.AI, Kimi, MiniMax, HuggingFace, NVIDIA
 
 ## Supported Channels
 
