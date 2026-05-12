@@ -15,7 +15,7 @@ RUN apt-get update && \
 # startup is fast and no runtime npm dependency is needed.
 RUN git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent && \
     cd /opt/hermes-agent && \
-    uv pip install --system --no-cache -e ".[all]" && \
+    uv pip install --system --no-cache -e ".[messaging,honcho,mcp,computer-use,pty,cli]" && \
     cd /opt/hermes-agent/web && \
     npm install --silent && \
     npm run build && \
