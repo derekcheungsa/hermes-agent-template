@@ -521,6 +521,7 @@ class Dashboard:
             self.proc = await asyncio.create_subprocess_exec(
                 "hermes", "dashboard",
                 "--port", str(HERMES_DASHBOARD_PORT),
+                "--no-open",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
