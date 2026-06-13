@@ -58,13 +58,27 @@ HERMES_DASHBOARD_HOST = "127.0.0.1"
 HERMES_DASHBOARD_PORT = int(os.environ.get("HERMES_DASHBOARD_PORT", "9119"))
 HERMES_DASHBOARD_URL = f"http://{HERMES_DASHBOARD_HOST}:{HERMES_DASHBOARD_PORT}"
 
+# Our public listen port (Railway injects $PORT; some templates set it to 8642,
+# which is also hermes' API-server default — see the collision guard below).
+PUBLIC_PORT = int(os.environ.get("PORT", "8080"))
+
 # OpenAI-compatible API server — a hermes "gateway" platform (enabled via
 # API_SERVER_ENABLED / API_SERVER_KEY) that runs inside the `hermes gateway`
 # subprocess and binds loopback in this container. We expose its /v1/* routes
 # through this proxy on $PORT so it shares the single public Railway URL with
-# the dashboard. We always *connect* over loopback — API_SERVER_HOST only
-# controls where the API server binds (127.0.0.1 is the recommended default).
-API_SERVER_PORT = int(os.environ.get("API_SERVER_PORT", "8642"))
+# the dashboard, and always *connect* over loopback (127.0.0.1).
+#
+# Collision guard: the proxy must never target its own listen port, or /v1/*
+# loops server.py back into itself (and the real API server can't bind). So we
+# default to hermes' 8642, fall back to 8643 when $PORT is 8642, and bump any
+# explicit value that still collides. Gateway.start() pins the API server to
+# this exact port so the two always agree.
+_api_default = 8643 if PUBLIC_PORT == 8642 else 8642
+API_SERVER_PORT = int(os.environ.get("API_SERVER_PORT", str(_api_default)))
+if API_SERVER_PORT == PUBLIC_PORT:
+    print(f"[server] API_SERVER_PORT ({API_SERVER_PORT}) collides with PORT — "
+          f"using {PUBLIC_PORT + 1} instead", flush=True)
+    API_SERVER_PORT = PUBLIC_PORT + 1
 API_SERVER_URL = f"http://127.0.0.1:{API_SERVER_PORT}"
 
 # Mirror dashboard-ref-only/auth_proxy.py: strip only `host` (httpx sets it)
@@ -454,6 +468,13 @@ class Gateway:
             # (which reads the same file) doesn't shadow our values.
             env = {**os.environ, "HERMES_HOME": HERMES_HOME}
             env.update(read_env(ENV_FILE))
+            # Pin the API server to the loopback port our /v1 proxy targets, so
+            # the two always agree and never collide with the public $PORT
+            # (which would loop the proxy back into this server). This overrides
+            # any API_SERVER_HOST/PORT from env or .env on purpose — in this
+            # template the API server is always reached via the in-container proxy.
+            env["API_SERVER_HOST"] = "127.0.0.1"
+            env["API_SERVER_PORT"] = str(API_SERVER_PORT)
             model = env.get("LLM_MODEL", "")
             provider_key = next((env.get(k, "") for k in PROVIDER_KEYS if env.get(k)), "")
             print(f"[gateway] model={model or '⚠ NOT SET'} | provider_key={'set' if provider_key else '⚠ NOT SET'}", flush=True)

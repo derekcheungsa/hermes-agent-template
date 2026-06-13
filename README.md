@@ -92,6 +92,11 @@ Hermes can serve an OpenAI-compatible API so external clients (ElevenLabs, Open 
 2. Redeploy and make sure the gateway is running (Save & Start in the dashboard).
 3. Point your client at `https://<your-app>.up.railway.app/v1` using `API_SERVER_KEY` as the Bearer token.
 
+> **Do not set `API_SERVER_HOST` / `API_SERVER_PORT`.** The server pins the API
+> server to a loopback port automatically and keeps it clear of the public
+> `$PORT`. (Setting `PORT=8642` *and* leaving the API server on its 8642 default
+> would otherwise collide — the proxy would loop into itself.)
+
 Verify:
 ```bash
 curl -s https://<your-app>.up.railway.app/v1/models \
