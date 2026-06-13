@@ -220,11 +220,20 @@ def is_config_complete(data: dict[str, str] | None = None) -> bool:
     """Single source of truth for 'ready to run the gateway'.
 
     Used by: GET / redirect, auto_start on boot, admin API status.
+    Counts OAuth credentials (auth.json / openai-codex) as a valid provider.
     """
     if data is None:
         data = read_env(ENV_FILE)
     has_model = bool(data.get("LLM_MODEL"))
     has_provider = any(data.get(k) for k in PROVIDER_KEYS)
+    if not has_provider:
+        auth_path = Path(HERMES_HOME) / "auth.json"
+        try:
+            if auth_path.exists():
+                auth_data = json.loads(auth_path.read_text())
+                has_provider = bool(auth_data.get("openai-codex"))
+        except Exception:
+            pass
     return has_model and has_provider
 
 
@@ -495,6 +504,106 @@ gw = Gateway()
 cfg_lock = asyncio.Lock()
 
 
+# ── OAuth session (ChatGPT / Codex device-code flow) ──────────────────────────
+class OAuthSession:
+    """Manages a `hermes auth add openai-codex` subprocess.
+
+    ChatGPT/Codex auth uses the OAuth device-code flow: no redirect callback
+    needed.  Hermes prints a verification URL + user code to stdout; we parse
+    them out and surface them to the setup UI, which shows them to the operator.
+    The subprocess polls the token endpoint until the user completes auth in
+    their own browser.  Tokens land in $HERMES_HOME/auth.json.
+    """
+
+    _URL_RE  = re.compile(r'https?://\S+', re.IGNORECASE)
+    _CODE_RE = re.compile(r'\b([A-Z0-9]{4,6}-[A-Z0-9]{4,6})\b')
+    _VURI_RE = re.compile(r'verification_uri(?:_complete)?["\s:=]+([^\s",\']+)', re.IGNORECASE)
+    _UCOD_RE = re.compile(r'user_code["\s:=]+([A-Za-z0-9-]+)', re.IGNORECASE)
+
+    def __init__(self):
+        self.proc: asyncio.subprocess.Process | None = None
+        self.state = "idle"   # idle | running | success | error
+        self.logs: deque[str] = deque(maxlen=100)
+        self.verification_url = ""
+        self.user_code = ""
+
+    async def start(self):
+        # Kill any previous run first.
+        if self.proc and self.proc.returncode is None:
+            self.proc.terminate()
+            try:
+                await asyncio.wait_for(self.proc.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                self.proc.kill()
+                await self.proc.wait()
+        self.state = "running"
+        self.logs.clear()
+        self.verification_url = ""
+        self.user_code = ""
+        try:
+            env = {**os.environ, "HERMES_HOME": HERMES_HOME}
+            env.update(read_env(ENV_FILE))
+            # No display in Railway — suppress browser-open attempts.
+            env.pop("DISPLAY", None)
+            env.pop("BROWSER", None)
+            self.proc = await asyncio.create_subprocess_exec(
+                "hermes", "auth", "add", "openai-codex",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env=env,
+            )
+            asyncio.create_task(self._drain())
+        except Exception as e:
+            self.state = "error"
+            self.logs.append(f"[error] Failed to start auth: {e}")
+
+    async def cancel(self):
+        if self.proc and self.proc.returncode is None:
+            self.proc.terminate()
+            try:
+                await asyncio.wait_for(self.proc.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                self.proc.kill()
+                await self.proc.wait()
+        self.state = "idle"
+
+    async def _drain(self):
+        assert self.proc and self.proc.stdout
+        async for raw in self.proc.stdout:
+            line = ANSI_ESCAPE.sub("", raw.decode(errors="replace").rstrip())
+            self.logs.append(line)
+            self._parse_line(line)
+        rc = self.proc.returncode
+        if self.state == "running":
+            self.state = "success" if rc == 0 else "error"
+            if rc != 0:
+                self.logs.append(f"[error] Auth process exited (code {rc})")
+
+    def _parse_line(self, line: str):
+        """Extract device-code URL and user code from subprocess stdout."""
+        if m := self._VURI_RE.search(line):
+            self.verification_url = m.group(1).rstrip("/")
+        elif not self.verification_url and (m := self._URL_RE.search(line)):
+            url = m.group(0)
+            if any(kw in url for kw in ("/device", "/activate", "/auth", "openai", "chatgpt")):
+                self.verification_url = url.rstrip("/")
+        if m := self._UCOD_RE.search(line):
+            self.user_code = m.group(1)
+        elif not self.user_code and (m := self._CODE_RE.search(line)):
+            self.user_code = m.group(1)
+
+    def status(self) -> dict:
+        return {
+            "state":            self.state,
+            "logs":             list(self.logs),
+            "verification_url": self.verification_url,
+            "user_code":        self.user_code,
+        }
+
+
+oauth_session = OAuthSession()
+
+
 # ── Hermes dashboard subprocess ───────────────────────────────────────────────
 class Dashboard:
     """Manages the `hermes dashboard` subprocess (native Hermes web UI).
@@ -712,6 +821,56 @@ async def api_test_provider(request: Request):
         return JSONResponse({"ok": False, "error": "Request timed out (10s)"})
     except httpx.RequestError as exc:
         return JSONResponse({"ok": False, "error": f"Network error: {exc}"})
+
+
+# ── ChatGPT OAuth handlers ────────────────────────────────────────────────────
+async def api_oauth_start(request: Request):
+    """POST /setup/api/oauth/chatgpt/start — spawn `hermes auth add openai-codex`."""
+    if err := guard(request): return err
+    asyncio.create_task(oauth_session.start())
+    return JSONResponse({"ok": True})
+
+
+async def api_oauth_status(request: Request):
+    """GET /setup/api/oauth/chatgpt/status — poll auth subprocess state."""
+    if err := guard(request): return err
+    return JSONResponse(oauth_session.status())
+
+
+async def api_oauth_check(request: Request):
+    """GET /setup/api/oauth/chatgpt/check — is openai-codex present in auth.json?"""
+    if err := guard(request): return err
+    auth_path = Path(HERMES_HOME) / "auth.json"
+    connected = False
+    try:
+        if auth_path.exists():
+            auth_data = json.loads(auth_path.read_text())
+            connected = bool(auth_data.get("openai-codex"))
+    except Exception:
+        pass
+    return JSONResponse({"connected": connected})
+
+
+async def api_oauth_cancel(request: Request):
+    """POST /setup/api/oauth/chatgpt/cancel — kill the running auth subprocess."""
+    if err := guard(request): return err
+    asyncio.create_task(oauth_session.cancel())
+    return JSONResponse({"ok": True})
+
+
+async def api_oauth_disconnect(request: Request):
+    """POST /setup/api/oauth/chatgpt/disconnect — cancel + remove credentials."""
+    if err := guard(request): return err
+    asyncio.create_task(oauth_session.cancel())
+    auth_path = Path(HERMES_HOME) / "auth.json"
+    try:
+        if auth_path.exists():
+            auth_data = json.loads(auth_path.read_text())
+            auth_data.pop("openai-codex", None)
+            auth_path.write_text(json.dumps(auth_data, indent=2, ensure_ascii=False))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    return JSONResponse({"ok": True})
 
 
 # ── Pairing ───────────────────────────────────────────────────────────────────
@@ -987,6 +1146,11 @@ routes = [
     Route("/setup/api/gateway/restart",         api_gw_restart,      methods=["POST"]),
     Route("/setup/api/config/reset",            api_config_reset,    methods=["POST"]),
     Route("/setup/api/test-provider",           api_test_provider,   methods=["POST"]),
+    Route("/setup/api/oauth/chatgpt/start",     api_oauth_start,     methods=["POST"]),
+    Route("/setup/api/oauth/chatgpt/status",    api_oauth_status),
+    Route("/setup/api/oauth/chatgpt/check",     api_oauth_check),
+    Route("/setup/api/oauth/chatgpt/cancel",    api_oauth_cancel,    methods=["POST"]),
+    Route("/setup/api/oauth/chatgpt/disconnect",api_oauth_disconnect,methods=["POST"]),
     Route("/setup/api/pairing/pending",         api_pairing_pending),
     Route("/setup/api/pairing/approve",         api_pairing_approve, methods=["POST"]),
     Route("/setup/api/pairing/deny",            api_pairing_deny,    methods=["POST"]),

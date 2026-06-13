@@ -801,7 +801,8 @@
             </select>
           </div>
 
-          <div class="field-gap" x-show="selectedProvider">
+          <!-- API key — hidden for OAuth providers -->
+          <div class="field-gap" x-show="selectedProvider && providerMap[selectedProvider]?.type !== 'oauth'">
             <label class="field-label">API Key</label>
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="password" style="flex:1;"
@@ -823,11 +824,77 @@
             </div>
           </div>
 
+          <!-- OAuth card — shown when ChatGPT (OAuth) is selected -->
+          <div class="field-gap" x-show="selectedProvider && providerMap[selectedProvider]?.type === 'oauth'">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;">
+
+              <!-- idle: not connected -->
+              <div x-show="chatgptOauth.state === 'idle' && !chatgptOauth.connected">
+                <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;line-height:1.55;">
+                  Connect your ChatGPT Pro or Codex account via OAuth — no API key needed.
+                  Hermes runs a device-code flow on the server; you approve it in your browser.
+                </p>
+                <button class="btn primary" @click="startChatgptAuth()">Authorize with ChatGPT →</button>
+              </div>
+
+              <!-- running: show device code info + log stream -->
+              <div x-show="chatgptOauth.state === 'running'">
+                <div x-show="chatgptOauth.verificationUrl"
+                     style="background:rgba(98,114,255,0.08);border:1px solid rgba(98,114,255,0.25);border-radius:6px;padding:14px;margin-bottom:12px;">
+                  <p style="font-size:11px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);margin-bottom:8px;">Open this URL in your browser</p>
+                  <a :href="chatgptOauth.verificationUrl" target="_blank" rel="noopener"
+                     style="font-family:var(--font-mono);font-size:13px;color:var(--accent2);word-break:break-all;"
+                     x-text="chatgptOauth.verificationUrl"></a>
+                  <div x-show="chatgptOauth.userCode" style="margin-top:10px;">
+                    <span style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.05em;">Code: </span>
+                    <span style="font-family:var(--font-mono);font-size:18px;font-weight:600;color:var(--text);letter-spacing:3px;" x-text="chatgptOauth.userCode"></span>
+                  </div>
+                  <a :href="chatgptOauth.verificationUrl" target="_blank" rel="noopener"
+                     class="btn sm" style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;text-decoration:none;">
+                    Open ↗
+                  </a>
+                </div>
+                <p x-show="!chatgptOauth.verificationUrl"
+                   style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+                  Starting auth flow… check the log below if nothing appears.
+                </p>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow);animation:pulse 1s infinite;flex-shrink:0;"></div>
+                  <span style="font-size:12px;font-family:var(--font-mono);color:var(--text-dim);">Waiting for authorization…</span>
+                  <button class="btn sm danger" @click="cancelChatgptAuth()" style="margin-left:auto;">Cancel</button>
+                </div>
+                <div x-show="chatgptOauth.logs.length > 0"
+                     style="background:#0a0c10;border-radius:6px;padding:8px 12px;max-height:110px;overflow-y:auto;">
+                  <template x-for="(l,i) in chatgptOauth.logs" :key="i">
+                    <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:pre-wrap;word-break:break-all;" x-text="l"></div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- connected -->
+              <div x-show="chatgptOauth.state !== 'running' && chatgptOauth.connected"
+                   style="display:flex;align-items:center;gap:10px;">
+                <span style="color:var(--green);font-size:15px;">✓</span>
+                <span style="font-size:13px;color:var(--green);font-family:var(--font-mono);font-weight:500;">Connected</span>
+                <button class="btn sm danger" @click="disconnectChatgpt()" style="margin-left:auto;">Disconnect</button>
+              </div>
+
+              <!-- error: not connected -->
+              <div x-show="chatgptOauth.state === 'error' && !chatgptOauth.connected">
+                <p style="font-size:13px;color:var(--red);font-family:var(--font-mono);margin-bottom:10px;"
+                   x-text="'Auth failed: ' + (chatgptOauth.logs[chatgptOauth.logs.length-1] || 'unknown error')"></p>
+                <button class="btn sm primary" @click="startChatgptAuth()">Retry</button>
+              </div>
+
+            </div>
+          </div>
+
           <div class="field-gap" x-show="selectedProvider">
             <label class="field-label">LLM Model</label>
             <input type="text" :value="vars.LLM_MODEL||''" @input="vars.LLM_MODEL=$event.target.value"
-                   placeholder="e.g. openai/gpt-4o-mini  or  deepseek/deepseek-chat  or  nvidia/llama-3.1-nemotron-70b-instruct">
-            <p class="hint">OpenRouter format: <code>provider/model-name</code> &nbsp;·&nbsp; NVIDIA format: <code>nvidia/model-name</code> — browse at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">build.nvidia.com/models</a></p>
+                   :placeholder="selectedProvider === 'ChatGPT (OAuth)' ? 'e.g. openai/chatgpt-4o-latest' : 'e.g. openai/gpt-4o-mini  or  deepseek/deepseek-chat  or  nvidia/llama-3.1-nemotron-70b-instruct'">
+            <p class="hint" x-show="selectedProvider !== 'ChatGPT (OAuth)'">OpenRouter format: <code>provider/model-name</code> &nbsp;·&nbsp; NVIDIA format: <code>nvidia/model-name</code> — browse at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">build.nvidia.com/models</a></p>
+            <p class="hint" x-show="selectedProvider === 'ChatGPT (OAuth)'">Common models: <code>openai/chatgpt-4o-latest</code>, <code>openai/o1</code>, <code>openai/codex-mini-latest</code></p>
           </div>
         </div>
 
@@ -1240,17 +1307,27 @@ function app() {
     tools,
 
     providerMap: {
-      'OpenRouter':  { key: 'OPENROUTER_API_KEY',  placeholder: 'sk-or-...' },
-      'DeepSeek':    { key: 'DEEPSEEK_API_KEY',     placeholder: 'sk-...'    },
-      'DashScope':   { key: 'DASHSCOPE_API_KEY',    placeholder: ''          },
-      'GLM / Z.AI':  { key: 'GLM_API_KEY',          placeholder: ''          },
-      'Kimi':        { key: 'KIMI_API_KEY',          placeholder: ''          },
-      'MiniMax':     { key: 'MINIMAX_API_KEY',       placeholder: ''          },
-      'HuggingFace': { key: 'HF_TOKEN',              placeholder: 'hf_...'   },
-      'NVIDIA':      { key: 'NVIDIA_API_KEY',        placeholder: 'nvapi-...' },
+      'OpenRouter':      { key: 'OPENROUTER_API_KEY',  placeholder: 'sk-or-...' },
+      'DeepSeek':        { key: 'DEEPSEEK_API_KEY',     placeholder: 'sk-...'    },
+      'DashScope':       { key: 'DASHSCOPE_API_KEY',    placeholder: ''          },
+      'GLM / Z.AI':      { key: 'GLM_API_KEY',          placeholder: ''          },
+      'Kimi':            { key: 'KIMI_API_KEY',          placeholder: ''          },
+      'MiniMax':         { key: 'MINIMAX_API_KEY',       placeholder: ''          },
+      'HuggingFace':     { key: 'HF_TOKEN',              placeholder: 'hf_...'   },
+      'NVIDIA':          { key: 'NVIDIA_API_KEY',        placeholder: 'nvapi-...' },
+      'ChatGPT (OAuth)': { key: null, type: 'oauth',    placeholder: null        },
     },
 
     selectedProvider: '',
+
+    chatgptOauth: {
+      connected: false,
+      state: 'idle',   // idle | running | success | error
+      logs: [],
+      verificationUrl: '',
+      userCode: '',
+    },
+    _oauthPollTimer: null,
 
     channelsEnabled: {
       telegram: false, discord: false, slack: false,
@@ -1262,14 +1339,16 @@ function app() {
     get pendingCount() { return this.pending.length; },
 
     get isSetupDone() {
-      const keys = Object.values(this.providerMap).map(p => p.key);
-      return !!(this.vars.LLM_MODEL && keys.some(k => this.vars[k]));
+      const keys = Object.values(this.providerMap).filter(p => p.key).map(p => p.key);
+      const hasApiKey = !!(this.vars.LLM_MODEL && keys.some(k => this.vars[k]));
+      const hasOauth  = !!(this.vars.LLM_MODEL && this.chatgptOauth.connected);
+      return hasApiKey || hasOauth;
     },
 
     onProviderChange() {
       // Clear keys from other providers when switching
       for (const [name, p] of Object.entries(this.providerMap)) {
-        if (name !== this.selectedProvider) this.vars[p.key] = '';
+        if (name !== this.selectedProvider && p.key) this.vars[p.key] = '';
       }
       this.testState = { loading: false, ok: null, error: '' };
     },
@@ -1311,7 +1390,7 @@ function app() {
     },
 
     async init() {
-      await Promise.all([this.loadConfig(), this.loadStatus(), this.loadLogs(), this.loadPairing()]);
+      await Promise.all([this.loadConfig(), this.checkChatgptConnected(), this.loadStatus(), this.loadLogs(), this.loadPairing()]);
       setInterval(() => this.loadStatus(),  5000);
       setInterval(() => this.loadLogs(),    3000);
       setInterval(() => this.loadPairing(), 5000);
@@ -1323,9 +1402,9 @@ function app() {
         if (r.ok) {
           const d = await r.json();
           this.vars = d.vars || {};
-          // Detect active provider
+          // Detect active provider (API-key providers only; OAuth detected separately)
           for (const [name, p] of Object.entries(this.providerMap)) {
-            if (this.vars[p.key]) { this.selectedProvider = name; break; }
+            if (p.key && this.vars[p.key]) { this.selectedProvider = name; break; }
           }
           // Detect active channels
           this.channelsEnabled = {
@@ -1341,11 +1420,11 @@ function app() {
           for (const t of this.tools) {
             this.toolsEnabled[t.key] = !!(this.vars[t.key]);
           }
-          // savedConfigComplete reflects the persisted server-side state.
-          // Masked secrets from the server still show truthy, so this
-          // mirrors the backend's is_config_complete() check.
-          const providerKeys = Object.values(this.providerMap).map(p => p.key);
-          this.savedConfigComplete = !!(this.vars.LLM_MODEL && providerKeys.some(k => this.vars[k]));
+          // savedConfigComplete mirrors the backend's is_config_complete() check.
+          // Masked secrets from the server still show truthy.
+          // OAuth state is merged in after checkChatgptConnected() resolves.
+          const providerKeys = Object.values(this.providerMap).filter(p => p.key).map(p => p.key);
+          this.savedConfigComplete = !!(this.vars.LLM_MODEL && (providerKeys.some(k => this.vars[k]) || this.chatgptOauth.connected));
         }
       } catch {}
     },
@@ -1422,6 +1501,75 @@ function app() {
       if (!confirm('Revoke access for this user?')) return;
       await fetch('/setup/api/pairing/revoke', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({platform,user_id}) });
       this.notify('Revoked', true); await this.loadPairing();
+    },
+
+    async checkChatgptConnected() {
+      try {
+        const r = await fetch('/setup/api/oauth/chatgpt/check');
+        if (!r.ok) return;
+        const d = await r.json();
+        this.chatgptOauth.connected = d.connected;
+        // If OAuth is the only configured provider, pre-select it in the dropdown.
+        if (d.connected && !this.selectedProvider) this.selectedProvider = 'ChatGPT (OAuth)';
+      } catch {}
+    },
+
+    async startChatgptAuth() {
+      this.chatgptOauth.state = 'running';
+      this.chatgptOauth.logs = [];
+      this.chatgptOauth.verificationUrl = '';
+      this.chatgptOauth.userCode = '';
+      try {
+        await fetch('/setup/api/oauth/chatgpt/start', { method: 'POST' });
+        this._startOauthPoll();
+      } catch(e) {
+        this.chatgptOauth.state = 'error';
+        this.chatgptOauth.logs = [e.message];
+      }
+    },
+
+    _startOauthPoll() {
+      if (this._oauthPollTimer) clearInterval(this._oauthPollTimer);
+      this._oauthPollTimer = setInterval(async () => {
+        try {
+          const r = await fetch('/setup/api/oauth/chatgpt/status');
+          if (!r.ok) return;
+          const d = await r.json();
+          this.chatgptOauth.state = d.state;
+          this.chatgptOauth.logs  = d.logs || [];
+          if (d.verification_url) this.chatgptOauth.verificationUrl = d.verification_url;
+          if (d.user_code)        this.chatgptOauth.userCode        = d.user_code;
+          if (d.state === 'success' || d.state === 'error') {
+            clearInterval(this._oauthPollTimer);
+            this._oauthPollTimer = null;
+            if (d.state === 'success') {
+              this.chatgptOauth.connected = true;
+              this.chatgptOauth.state = 'idle';
+              this.notify('ChatGPT authorized!', true);
+            }
+          }
+        } catch {}
+      }, 3000);
+    },
+
+    async cancelChatgptAuth() {
+      if (this._oauthPollTimer) { clearInterval(this._oauthPollTimer); this._oauthPollTimer = null; }
+      await fetch('/setup/api/oauth/chatgpt/cancel', { method: 'POST' });
+      this.chatgptOauth.state = 'idle';
+    },
+
+    async disconnectChatgpt() {
+      if (!confirm('Disconnect ChatGPT? This will remove your OAuth credentials.')) return;
+      if (this._oauthPollTimer) { clearInterval(this._oauthPollTimer); this._oauthPollTimer = null; }
+      try {
+        await fetch('/setup/api/oauth/chatgpt/disconnect', { method: 'POST' });
+        this.chatgptOauth.connected = false;
+        this.chatgptOauth.state = 'idle';
+        if (this.selectedProvider === 'ChatGPT (OAuth)') this.selectedProvider = '';
+        this.notify('Disconnected', true);
+      } catch(e) {
+        this.notify('Disconnect failed', false);
+      }
     },
 
     fmtDate(ts) {
