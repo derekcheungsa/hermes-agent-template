@@ -8,12 +8,18 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
+# Pin the hermes-agent version the template builds against. Bump this only
+# after verifying the new release works with the course (e.g. 0.16 / v2026.6.5
+# breaks Telegram on the web). Override at build time to test a candidate:
+#   docker build --build-arg HERMES_VERSION=v2026.6.5 .
+ARG HERMES_VERSION=v2026.5.29.2
+
 # Install hermes-agent (provides the `hermes` CLI) and pre-build its React
 # dashboard so `hermes dashboard` has nothing to build at runtime.
 # Deleting web/ afterwards makes hermes's internal _build_web_ui skip the
 # rebuild step (it early-returns when package.json is absent), so container
 # startup is fast and no runtime npm dependency is needed.
-RUN git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent && \
+RUN git clone --depth 1 --branch ${HERMES_VERSION} https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent && \
     cd /opt/hermes-agent && \
     uv pip install --system --no-cache -e ".[messaging,honcho,mcp,computer-use,pty,cli,web]" && \
     cd /opt/hermes-agent/web && \
