@@ -101,6 +101,16 @@ curl -s https://<your-app>.up.railway.app/v1/models \
 
 The API server binds to loopback inside the container and is reached only through the proxy; `/v1/*` bypasses the dashboard's cookie login and is authenticated solely by `API_SERVER_KEY`. Streaming (`stream=true`) is supported.
 
+### Connect ElevenLabs
+
+In the ElevenLabs Conversational AI agent settings, choose a **Custom LLM**:
+
+- **Server URL:** `https://<your-app>.up.railway.app/v1`
+- **Model ID:** `hermes-agent` (must match `API_SERVER_MODEL_NAME`)
+- **API Key:** your `API_SERVER_KEY`
+
+ElevenLabs sends it as `Authorization: Bearer <API_SERVER_KEY>`, which the proxy forwards to the API server. Leave streaming enabled — it's supported end-to-end.
+
 ## Supported Providers
 
 OpenRouter, DeepSeek, DashScope, GLM / Z.AI, Kimi, MiniMax, HuggingFace, NVIDIA
