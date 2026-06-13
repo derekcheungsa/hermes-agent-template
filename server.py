@@ -910,7 +910,10 @@ async def api_pairing_approve(request: Request):
     if err := guard(request): return err
     try: body = await request.json()
     except Exception: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    platform, code = body.get("platform",""), body.get("code","").upper().strip()
+    # `code` is the pending entry key echoed back from the UI (a lowercase hex
+    # entry_id in hermes-agent's current pairing schema). Compare it verbatim —
+    # do NOT upper-case it, or the hex key will no longer match (#"Code not found").
+    platform, code = body.get("platform",""), body.get("code","").strip()
     if not platform or not code:
         return JSONResponse({"error": "platform and code required"}, status_code=400)
     pending_path = PAIRING_DIR / f"{platform}-pending.json"
@@ -929,7 +932,7 @@ async def api_pairing_deny(request: Request):
     if err := guard(request): return err
     try: body = await request.json()
     except Exception: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    platform, code = body.get("platform",""), body.get("code","").upper().strip()
+    platform, code = body.get("platform",""), body.get("code","").strip()
     p = PAIRING_DIR / f"{platform}-pending.json"
     pending = _pjson(p)
     if code in pending:
