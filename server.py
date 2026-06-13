@@ -40,6 +40,7 @@ from starlette.responses import (
     JSONResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
@@ -56,6 +57,15 @@ PAIRING_TTL = 3600
 HERMES_DASHBOARD_HOST = "127.0.0.1"
 HERMES_DASHBOARD_PORT = int(os.environ.get("HERMES_DASHBOARD_PORT", "9119"))
 HERMES_DASHBOARD_URL = f"http://{HERMES_DASHBOARD_HOST}:{HERMES_DASHBOARD_PORT}"
+
+# OpenAI-compatible API server — a hermes "gateway" platform (enabled via
+# API_SERVER_ENABLED / API_SERVER_KEY) that runs inside the `hermes gateway`
+# subprocess and binds loopback in this container. We expose its /v1/* routes
+# through this proxy on $PORT so it shares the single public Railway URL with
+# the dashboard. We always *connect* over loopback — API_SERVER_HOST only
+# controls where the API server binds (127.0.0.1 is the recommended default).
+API_SERVER_PORT = int(os.environ.get("API_SERVER_PORT", "8642"))
+API_SERVER_URL = f"http://127.0.0.1:{API_SERVER_PORT}"
 
 # Mirror dashboard-ref-only/auth_proxy.py: strip only `host` (httpx sets it)
 # and `transfer-encoding` (httpx recomputes it from the body). Keep everything
@@ -1070,6 +1080,89 @@ async def _proxy_to_dashboard(request: Request) -> Response:
     )
 
 
+async def _proxy_to_api(request: Request) -> Response:
+    """Stream a request to the OpenAI-compatible API server over loopback.
+
+    Two differences from the dashboard proxy:
+      1. No cookie guard — the API server authenticates callers via the
+         API_SERVER_KEY Bearer token, which we forward untouched. This is what
+         lets external clients (e.g. ElevenLabs) call /v1 with just the key.
+      2. The response is streamed, not buffered, so Server-Sent Events from
+         /v1/chat/completions (stream=true) flow through incrementally instead
+         of stalling until the full generation completes.
+    """
+    client = get_http_client()
+    target = f"{API_SERVER_URL}{request.url.path}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+
+    req_headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in HOP_BY_HOP
+    }
+    body = await request.body()
+
+    # LLM generations far exceed the dashboard's 30s budget and a streamed
+    # response holds the connection open for the whole turn, so disable the
+    # read timeout. Keep a short connect timeout to fail fast when the API
+    # server isn't running (e.g. gateway stopped or API_SERVER_ENABLED unset).
+    api_req = client.build_request(
+        request.method, target,
+        headers=req_headers, content=body,
+        timeout=httpx.Timeout(None, connect=5.0),
+    )
+    try:
+        upstream = await client.send(api_req, stream=True)
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        return JSONResponse(
+            {"error": {
+                "message": ("Hermes API server is not reachable. Set "
+                            "API_SERVER_ENABLED=true and a strong API_SERVER_KEY, "
+                            "then ensure the gateway is running."),
+                "type": "server_unavailable",
+            }},
+            status_code=503,
+        )
+    except httpx.RequestError as e:
+        print(f"[api-proxy] upstream error for {request.method} {request.url.path}: {e}", flush=True)
+        return JSONResponse(
+            {"error": {"message": "Bad gateway to the API server.", "type": "bad_gateway"}},
+            status_code=502,
+        )
+
+    # aiter_bytes() yields content-decoded chunks, so drop content-encoding and
+    # content-length (Starlette re-frames the streamed body).
+    resp_headers = {
+        k: v for k, v in upstream.headers.items()
+        if k.lower() not in HOP_BY_HOP
+        and k.lower() not in ("content-encoding", "content-length")
+    }
+
+    async def _body_stream():
+        try:
+            async for chunk in upstream.aiter_bytes():
+                yield chunk
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        _body_stream(),
+        status_code=upstream.status_code,
+        headers=resp_headers,
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
+async def route_api(request: Request) -> Response:
+    """Catch-all for /v1/*: proxy to the in-container API server.
+
+    Intentionally unguarded — the API server enforces its own Bearer-token
+    auth (API_SERVER_KEY). The dashboard's cookie auth must NOT apply here, or
+    external API clients would get 401s for lacking a session cookie.
+    """
+    return await _proxy_to_api(request)
+
+
 async def route_root(request: Request) -> Response:
     """GET /: first-visit smart redirect, otherwise proxy to the dashboard.
 
@@ -1162,6 +1255,11 @@ routes = [
 
     # /setup/* typos return a real 404 — not a silent proxy fallthrough.
     Route("/setup/{path:path}",                 route_setup_404,     methods=ANY_METHOD),
+
+    # OpenAI-compatible API — streamed to the in-container API server. NOT
+    # cookie-guarded: the API server authenticates via the API_SERVER_KEY
+    # Bearer token, so external clients (e.g. ElevenLabs) reach it directly.
+    Route("/v1/{path:path}",                    route_api,           methods=ANY_METHOD),
 
     # Root: redirect to /setup if unconfigured, otherwise proxy the dashboard.
     Route("/",                                  route_root,          methods=ANY_METHOD),
