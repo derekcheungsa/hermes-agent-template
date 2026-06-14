@@ -71,10 +71,50 @@ Message your Telegram bot. If you're a new user, a pairing request will appear i
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | Web server port (set automatically by Railway) |
-| `ADMIN_USERNAME` | `admin` | Basic auth username |
-| `ADMIN_PASSWORD` | *(auto-generated)* | Basic auth password — if unset, a random password is printed to logs |
+| `ADMIN_USERNAME` | `admin` | Admin login username |
+| `ADMIN_PASSWORD` | *(auto-generated)* | Admin login password — if unset, a random password is printed to logs |
+| `API_SERVER_ENABLED` | `false` | Set `true` to expose the OpenAI-compatible API at `/v1` (see below) |
+| `API_SERVER_KEY` | *(unset)* | **Required** when the API is enabled — Bearer token clients must send. Use a strong random value (`openssl rand -hex 32`) |
+| `API_SERVER_MODEL_NAME` | `hermes-agent` | Model id reported by `/v1/models` and accepted by `/v1/chat/completions` |
 
 All other configuration (LLM provider, model, channels, tools) is managed through the admin dashboard.
+
+## OpenAI-Compatible API (`/v1`)
+
+Hermes can serve an OpenAI-compatible API so external clients (ElevenLabs, Open WebUI, any OpenAI SDK) can talk to your agent. This template proxies it on the **same public Railway URL** as the dashboard — no extra port, no Caddy/nginx.
+
+1. Set these Railway variables:
+   ```
+   API_SERVER_ENABLED=true
+   API_SERVER_KEY=<openssl rand -hex 32>
+   API_SERVER_MODEL_NAME=hermes-agent
+   ```
+2. Redeploy and make sure the gateway is running (Save & Start in the dashboard).
+3. Point your client at `https://<your-app>.up.railway.app/v1` using `API_SERVER_KEY` as the Bearer token.
+
+> **Do not set `API_SERVER_HOST` / `API_SERVER_PORT`.** The server pins the API
+> server to a loopback port automatically and keeps it clear of the public
+> `$PORT`. (Setting `PORT=8642` *and* leaving the API server on its 8642 default
+> would otherwise collide — the proxy would loop into itself.)
+
+Verify:
+```bash
+curl -s https://<your-app>.up.railway.app/v1/models \
+  -H "Authorization: Bearer $API_SERVER_KEY"
+# → {"data":[{"id":"hermes-agent",...}]}
+```
+
+The API server binds to loopback inside the container and is reached only through the proxy; `/v1/*` bypasses the dashboard's cookie login and is authenticated solely by `API_SERVER_KEY`. Streaming (`stream=true`) is supported.
+
+### Connect ElevenLabs
+
+In the ElevenLabs Conversational AI agent settings, choose a **Custom LLM**:
+
+- **Server URL:** `https://<your-app>.up.railway.app/v1`
+- **Model ID:** `hermes-agent` (must match `API_SERVER_MODEL_NAME`)
+- **API Key:** your `API_SERVER_KEY`
+
+ElevenLabs sends it as `Authorization: Bearer <API_SERVER_KEY>`, which the proxy forwards to the API server. Leave streaming enabled — it's supported end-to-end.
 
 ## Supported Providers
 
@@ -92,11 +132,13 @@ Parallel (search), Firecrawl (scraping), Tavily (search), FAL (image gen), Brows
 
 ```
 Railway Container
-├── Python Admin Server (Starlette + Uvicorn)
-│   ├── /            — Admin dashboard (Basic Auth)
-│   ├── /health      — Health check (no auth)
-│   └── /api/*       — Config, status, logs, gateway, pairing
-└── hermes gateway   — Managed as async subprocess
+├── Python Admin Server (Starlette + Uvicorn) — listens on $PORT
+│   ├── /            — Hermes dashboard       (proxied → 127.0.0.1:9119, cookie auth)
+│   ├── /setup/*     — Setup wizard + mgmt API (cookie auth)
+│   ├── /v1/*        — OpenAI-compatible API   (proxied → 127.0.0.1:8642, Bearer auth)
+│   └── /health      — Health check (no auth)
+└── hermes gateway   — Managed async subprocess
+    └── api_server platform — binds 127.0.0.1:8642 when API_SERVER_ENABLED=true
 ```
 
 The admin server runs on `$PORT` and manages the Hermes gateway as a child process. Config is stored in `/data/.hermes/.env` and `/data/.hermes/config.yaml`. Gateway stdout/stderr is captured into a ring buffer and streamed to the Logs panel.
