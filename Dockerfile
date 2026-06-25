@@ -12,7 +12,7 @@ RUN apt-get update && \
 # after verifying the new release works with the course (e.g. 0.16 / v2026.6.5
 # breaks Telegram on the web; 0.17 / v2026.6.19 untested). Override at build time to test a candidate:
 #   docker build --build-arg HERMES_VERSION=v2026.6.5 .
-ARG HERMES_VERSION=v2026.6.19
+ARG HERMES_VERSION=main
 
 # Install hermes-agent (provides the `hermes` CLI) and pre-build its React
 # dashboard so `hermes dashboard` has nothing to build at runtime.
