@@ -7,7 +7,9 @@ __pycache__/
 ref_only/
 ref_ui_only/
 ref_ui_only_2/
-skills/
+skills/*
+!skills/README.md
+!skills/deep-research-diamond
 dashboard-ref-only/
 openai_anth_ref_only/
 OVERVIEW.md

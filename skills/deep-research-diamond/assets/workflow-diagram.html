@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Research Diamond — Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  @import url('https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Medium.min.css');
+  @import url('https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Semibold.min.css');
+  @import url('https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Bold.min.css');
+
+  :root {
+    --paper: #FFFFFF;
+    --paper-2: #F4F1FF;
+    --ink: #19172E;
+    --muted: #5C5A75;
+    --soft: #A3A0BC;
+    --rule: rgba(25,23,46,0.12);
+    --rule-solid: #DCD5FF;
+    --accent: #6D5DF6;
+    --accent-tint: rgba(109,93,246,0.08);
+    --link: #8B7DF9;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 2rem;
+  }
+  .eyebrow {
+    font-family: 'MiSans', sans-serif;
+    font-weight: 630;
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+  }
+  h1 {
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    margin-top: 0.5rem;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: 640px;
+  }
+  .diagram {
+    margin-top: 1.75rem;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .colophon {
+    margin-top: 1.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+    font-family: 'MiSans', sans-serif;
+    font-weight: 380;
+    font-size: 10px;
+    color: var(--soft);
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="eyebrow">Workflow Architecture · Multi-Agent</p>
+  <h1>Deep Research Diamond</h1>
+  <p class="subtitle">Three model-diverse scouts research independently with full citations; a fusion agent reconciles agreements and preserves disagreements with attribution; a persistence bot upserts everything to Supabase by <code>run_id</code> — resumable at every phase.</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 728 456" role="img" aria-labelledby="drd-title drd-desc" xmlns="http://www.w3.org/2000/svg">
+    <title id="drd-title">Deep Research Diamond workflow</title>
+    <desc id="drd-desc">Data flow showing a runner fanning a research question out to three independent scout bots, whose cited findings converge on a fusion agent that preserves disagreements with attribution, then a persistence bot upserts results to Supabase by run_id and returns confirmation.</desc>
+
+    <defs>
+      <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+        <circle cx="11" cy="11" r="0.8" fill="rgba(25,23,46,0.10)"/>
+      </pattern>
+      <marker id="arr-muted" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#5C5A75"/>
+      </marker>
+      <marker id="arr-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#6D5DF6"/>
+      </marker>
+      <marker id="arr-link" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#8B7DF9"/>
+      </marker>
+    </defs>
+
+    <!-- background -->
+    <rect x="0" y="0" width="728" height="456" fill="#FFFFFF"/>
+    <rect x="0" y="0" width="728" height="456" fill="url(#dots)" opacity="0.6"/>
+
+    <!-- lane tints (alternating: lanes 0 and 2) -->
+    <rect x="0" y="36" width="728" height="80" fill="rgba(25,23,46,0.018)"/>
+    <rect x="0" y="196" width="728" height="80" fill="rgba(25,23,46,0.018)"/>
+
+    <!-- lane dividers -->
+    <line x1="0" y1="36" x2="728" y2="36" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+    <line x1="0" y1="116" x2="728" y2="116" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+    <line x1="0" y1="196" x2="728" y2="196" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+    <line x1="0" y1="276" x2="728" y2="276" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+    <line x1="0" y1="356" x2="728" y2="356" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+    <line x1="140" y1="36" x2="140" y2="356" stroke="rgba(25,23,46,0.12)" stroke-width="0.8"/>
+
+    <!-- step header chips -->
+    <g font-family="'MiSans', sans-serif" font-weight="630">
+      <rect x="180" y="6" width="32" height="16" rx="8" fill="rgba(25,23,46,0.12)"/>
+      <text x="196" y="17" font-size="7" fill="#19172E" text-anchor="middle">01</text>
+      <text x="196" y="29" font-size="7" fill="#5C5A75" text-anchor="middle" letter-spacing="0.14em">INTAKE</text>
+
+      <rect x="292" y="6" width="32" height="16" rx="8" fill="rgba(25,23,46,0.12)"/>
+      <text x="308" y="17" font-size="7" fill="#19172E" text-anchor="middle">02</text>
+      <text x="308" y="29" font-size="7" fill="#5C5A75" text-anchor="middle" letter-spacing="0.14em">RESEARCH</text>
+
+      <rect x="404" y="6" width="32" height="16" rx="8" fill="rgba(109,93,246,0.20)"/>
+      <text x="420" y="17" font-size="7" fill="#6D5DF6" text-anchor="middle">03</text>
+      <text x="420" y="29" font-size="7" fill="#6D5DF6" text-anchor="middle" letter-spacing="0.14em">FUSE</text>
+
+      <rect x="516" y="6" width="32" height="16" rx="8" fill="rgba(25,23,46,0.12)"/>
+      <text x="532" y="17" font-size="7" fill="#19172E" text-anchor="middle">04</text>
+      <text x="532" y="29" font-size="7" fill="#5C5A75" text-anchor="middle" letter-spacing="0.14em">PERSIST</text>
+
+      <rect x="628" y="6" width="32" height="16" rx="8" fill="rgba(25,23,46,0.12)"/>
+      <text x="644" y="17" font-size="7" fill="#19172E" text-anchor="middle">05</text>
+      <text x="644" y="29" font-size="7" fill="#5C5A75" text-anchor="middle" letter-spacing="0.14em">CONFIRM</text>
+    </g>
+
+    <!-- lane labels -->
+    <g font-family="'MiSans', sans-serif" font-weight="630" font-size="7" fill="#5C5A75" letter-spacing="0.14em" text-anchor="middle">
+      <text x="70" y="72">PM ·</text>
+      <text x="70" y="84">RUNNER</text>
+      <text x="70" y="152">SCOUTS ·</text>
+      <text x="70" y="164">INDEPENDENT</text>
+      <text x="70" y="232">FUSION ·</text>
+      <text x="70" y="244">ATTRIBUTION</text>
+      <text x="70" y="312">PERSIST ·</text>
+      <text x="70" y="324">SOLE CREDS</text>
+    </g>
+
+    <!-- arrows (before nodes) -->
+    <!-- A1 trigger: intake -> scouts (fan-out dispatch) -->
+    <path d="M246,76 H300 Q308,76 308,84 V124" fill="none" stroke="#5C5A75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-muted)"/>
+
+    <!-- A2 focal accent: scouts -> fusion (fan-in, the diamond edge) -->
+    <path d="M358,156 H412 Q420,156 420,164 V204" fill="none" stroke="#6D5DF6" stroke-width="1.2" marker-end="url(#arr-accent)"/>
+    <rect x="426" y="178" width="56" height="10" rx="2" fill="#FFFFFF"/>
+    <text x="430" y="186" font-family="'MiSans', sans-serif" font-weight="380" font-size="8" fill="#5C5A75" letter-spacing="0.06em">findings ×3</text>
+
+    <!-- A3 muted: fusion -> persist -->
+    <path d="M470,236 H524 Q532,236 532,244 V284" fill="none" stroke="#5C5A75" stroke-width="1" marker-end="url(#arr-muted)"/>
+
+    <!-- A4 link: persist -> confirm (external write confirmed back to PM) -->
+    <path d="M582,316 H636 Q644,316 644,308 V108" fill="none" stroke="#8B7DF9" stroke-width="1" marker-end="url(#arr-link)"/>
+
+    <!-- nodes -->
+    <!-- N1 Intake (PM, step 0) -->
+    <g>
+      <rect x="146" y="44" width="100" height="64" rx="6" fill="#FFFFFF" stroke="rgba(25,23,46,0.25)" stroke-width="1"/>
+      <rect x="150" y="48" width="18" height="10" rx="3" fill="rgba(25,23,46,0.12)"/>
+      <text x="159" y="56" font-family="'MiSans', sans-serif" font-weight="630" font-size="6" fill="#19172E" text-anchor="middle">PM</text>
+      <text x="196" y="67" font-family="'Inter', sans-serif" font-weight="600" font-size="9" fill="#19172E" text-anchor="middle">Intake · run_id</text>
+      <text x="196" y="79" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#5C5A75" text-anchor="middle">question → run workspace</text>
+      <text x="196" y="91" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#A3A0BC" text-anchor="middle">diamond runner script</text>
+      <rect x="226" y="98" width="16" height="8" rx="3" fill="#9c6b50"/>
+      <text x="234" y="104" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">FL</text>
+    </g>
+
+    <!-- N2 Scouts (SCT, step 1) -->
+    <g>
+      <rect x="258" y="124" width="100" height="64" rx="6" fill="#FFFFFF" stroke="rgba(25,23,46,0.25)" stroke-width="1"/>
+      <rect x="262" y="128" width="18" height="10" rx="3" fill="rgba(25,23,46,0.12)"/>
+      <text x="271" y="136" font-family="'MiSans', sans-serif" font-weight="630" font-size="6" fill="#19172E" text-anchor="middle">SCT</text>
+      <text x="308" y="147" font-family="'Inter', sans-serif" font-weight="600" font-size="9" fill="#19172E" text-anchor="middle">3 Independent Scouts</text>
+      <text x="308" y="159" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#5C5A75" text-anchor="middle">3 models · independent</text>
+      <text x="308" y="171" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#A3A0BC" text-anchor="middle">deepseek · glm · minimax</text>
+      <rect x="262" y="178" width="16" height="8" rx="3" fill="#9c6b50"/>
+      <text x="270" y="184" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">FL</text>
+      <rect x="338" y="178" width="16" height="8" rx="3" fill="#5e7a9b"/>
+      <text x="346" y="184" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">DB</text>
+    </g>
+
+    <!-- N3 Fusion (FUS, step 2) — FOCAL -->
+    <g>
+      <rect x="370" y="204" width="100" height="64" rx="6" fill="rgba(109,93,246,0.07)" stroke="#6D5DF6" stroke-width="1.2"/>
+      <rect x="374" y="208" width="18" height="10" rx="3" fill="rgba(109,93,246,0.18)"/>
+      <text x="383" y="216" font-family="'MiSans', sans-serif" font-weight="630" font-size="6" fill="#6D5DF6" text-anchor="middle">FUS</text>
+      <text x="420" y="227" font-family="'Inter', sans-serif" font-weight="600" font-size="9" fill="#19172E" text-anchor="middle">Fusion &amp; Attribution</text>
+      <text x="420" y="239" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#5C5A75" text-anchor="middle">disagreements kept verbatim</text>
+      <text x="420" y="251" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#A3A0BC" text-anchor="middle">lead-researcher · glm-5.3</text>
+      <rect x="374" y="258" width="16" height="8" rx="3" fill="#5e7a9b"/>
+      <text x="382" y="264" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">DB</text>
+      <rect x="450" y="258" width="16" height="8" rx="3" fill="#b8915a"/>
+      <text x="458" y="264" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">TB</text>
+    </g>
+
+    <!-- N4 Persist (PST, step 3) — credential boundary -->
+    <g>
+      <rect x="482" y="284" width="100" height="64" rx="6" fill="rgba(184,84,80,0.06)" stroke="rgba(184,84,80,0.35)" stroke-width="1"/>
+      <rect x="486" y="288" width="18" height="10" rx="3" fill="rgba(184,84,80,0.18)"/>
+      <text x="495" y="296" font-family="'MiSans', sans-serif" font-weight="630" font-size="6" fill="#b85450" text-anchor="middle">PST</text>
+      <text x="532" y="307" font-family="'Inter', sans-serif" font-weight="600" font-size="9" fill="#b85450" text-anchor="middle">Upsert by run_id</text>
+      <text x="532" y="319" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#5C5A75" text-anchor="middle">findings·cites·synthesis</text>
+      <text x="532" y="331" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#A3A0BC" text-anchor="middle">supabase-bot · only creds</text>
+      <rect x="486" y="338" width="16" height="8" rx="3" fill="#b8915a"/>
+      <text x="494" y="344" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">TB</text>
+      <rect x="562" y="338" width="16" height="8" rx="3" fill="#b8915a"/>
+      <text x="570" y="344" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">TB</text>
+    </g>
+
+    <!-- N5 Confirm (PM, step 4) -->
+    <g>
+      <rect x="594" y="44" width="100" height="64" rx="6" fill="#FFFFFF" stroke="rgba(25,23,46,0.25)" stroke-width="1"/>
+      <rect x="598" y="48" width="18" height="10" rx="3" fill="rgba(25,23,46,0.12)"/>
+      <text x="607" y="56" font-family="'MiSans', sans-serif" font-weight="630" font-size="6" fill="#19172E" text-anchor="middle">PM</text>
+      <text x="644" y="67" font-family="'Inter', sans-serif" font-weight="600" font-size="9" fill="#19172E" text-anchor="middle">Confirm &amp; Verify</text>
+      <text x="644" y="79" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#5C5A75" text-anchor="middle">PERSISTED · query-back</text>
+      <text x="644" y="91" font-family="'MiSans', sans-serif" font-weight="380" font-size="6.5" fill="#A3A0BC" text-anchor="middle">status ledger ↔ database</text>
+      <rect x="598" y="98" width="16" height="8" rx="3" fill="#b8915a"/>
+      <text x="606" y="104" font-family="'MiSans', sans-serif" font-weight="630" font-size="5" fill="#FFFFFF" text-anchor="middle">TB</text>
+    </g>
+
+    <!-- legend -->
+    <g font-family="'MiSans', sans-serif">
+      <!-- row 1: STEPS -->
+      <text x="144" y="375" font-weight="630" font-size="6" fill="#A3A0BC" letter-spacing="0.14em">STEPS</text>
+      <g font-weight="630" font-size="6">
+        <rect x="210" y="366" width="64" height="12" rx="6" fill="rgba(25,23,46,0.12)"/>
+        <text x="242" y="374.5" fill="#5C5A75" text-anchor="middle">01 INTAKE</text>
+        <rect x="282" y="366" width="72" height="12" rx="6" fill="rgba(25,23,46,0.12)"/>
+        <text x="318" y="374.5" fill="#5C5A75" text-anchor="middle">02 RESEARCH</text>
+        <rect x="362" y="366" width="56" height="12" rx="6" fill="rgba(109,93,246,0.20)"/>
+        <text x="390" y="374.5" fill="#6D5DF6" text-anchor="middle">03 FUSE</text>
+        <rect x="426" y="366" width="68" height="12" rx="6" fill="rgba(25,23,46,0.12)"/>
+        <text x="460" y="374.5" fill="#5C5A75" text-anchor="middle">04 PERSIST</text>
+        <rect x="502" y="366" width="72" height="12" rx="6" fill="rgba(25,23,46,0.12)"/>
+        <text x="538" y="374.5" fill="#5C5A75" text-anchor="middle">05 CONFIRM</text>
+      </g>
+
+      <!-- row 2: DATA TYPE -->
+      <text x="144" y="396" font-weight="630" font-size="6" fill="#A3A0BC" letter-spacing="0.14em">DATA TYPE</text>
+      <rect x="210" y="388" width="16" height="8" rx="3" fill="#9c6b50"/>
+      <text x="232" y="395.5" font-weight="380" font-size="6.5" fill="#5C5A75">FL · question file</text>
+      <rect x="310" y="388" width="16" height="8" rx="3" fill="#5e7a9b"/>
+      <text x="332" y="395.5" font-weight="380" font-size="6.5" fill="#5C5A75">DB · findings JSON</text>
+      <rect x="424" y="388" width="16" height="8" rx="3" fill="#b8915a"/>
+      <text x="446" y="395.5" font-weight="380" font-size="6.5" fill="#5C5A75">TB · synthesis / tables</text>
+      <text x="584" y="395.5" font-weight="380" font-size="6.5" fill="#A3A0BC">in = left · out = right chip</text>
+
+      <!-- row 3: CONCERN -->
+      <text x="144" y="417" font-weight="630" font-size="6" fill="#A3A0BC" letter-spacing="0.14em">CONCERN</text>
+      <rect x="210" y="409" width="16" height="8" rx="3" fill="rgba(109,93,246,0.20)"/>
+      <text x="232" y="416.5" font-weight="380" font-size="6.5" fill="#5C5A75">focal — fusion fan-in</text>
+      <rect x="346" y="409" width="16" height="8" rx="3" fill="rgba(184,84,80,0.18)"/>
+      <text x="368" y="416.5" font-weight="380" font-size="6.5" fill="#5C5A75">credentials · DB boundary</text>
+
+      <!-- row 4: FLOW -->
+      <text x="144" y="438" font-weight="630" font-size="6" fill="#A3A0BC" letter-spacing="0.14em">FLOW</text>
+      <line x1="210" y1="435" x2="238" y2="435" stroke="#5C5A75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-muted)"/>
+      <text x="244" y="437.5" font-weight="380" font-size="6.5" fill="#5C5A75">dispatch</text>
+      <line x1="300" y1="435" x2="328" y2="435" stroke="#6D5DF6" stroke-width="1.2" marker-end="url(#arr-accent)"/>
+      <text x="334" y="437.5" font-weight="380" font-size="6.5" fill="#5C5A75">fan-in (focal)</text>
+      <line x1="404" y1="435" x2="432" y2="435" stroke="#5C5A75" stroke-width="1" marker-end="url(#arr-muted)"/>
+      <text x="438" y="437.5" font-weight="380" font-size="6.5" fill="#5C5A75">hand-off</text>
+      <line x1="496" y1="435" x2="524" y2="435" stroke="#8B7DF9" stroke-width="1" marker-end="url(#arr-link)"/>
+      <text x="530" y="437.5" font-weight="380" font-size="6.5" fill="#5C5A75">persisted · confirm</text>
+    </g>
+  </svg>
+  </div>
+
+  <p class="colophon">deep-research-diamond · scouts → fusion → supabase · every phase idempotent &amp; resumable by run_id</p>
+</div>
+</body>
+</html>
